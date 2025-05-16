@@ -1,271 +1,374 @@
 <?php  
-session_start();  
-$conn = new mysqli("localhost", "root", "", "ocrms");  
+session_start();
+include('db.php');  
 
-if ($conn->connect_error) {  
-    die("Connection failed: " . $conn->connect_error);  
-}  
+// Initialize login status (adjust according to your session logic)  
+$isLoggedIn = isset($_SESSION['user_id']) && !empty($_SESSION['user_id']);  
 
-// Handle login  
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["login"])) {  
-    $email = trim($_POST["email"]);  
-    $password = $_POST["password"];  
-
-    $stmt = $conn->prepare("SELECT id, first_name, password FROM users WHERE email = ?");  
-    $stmt->bind_param("s", $email);  
-    $stmt->execute();  
-    $stmt->bind_result($user_id, $first_name, $hashed_password);  
-
-    if ($stmt->fetch() && password_verify($password, $hashed_password)) {  
-        $_SESSION['user_id'] = $user_id;  
-        $_SESSION['first_name'] = $first_name;  
-        $_SESSION['email'] = $email;  
-        header("Location: dashboard.php");  
-        exit();  
-    } else {  
-        $_SESSION['error'] = "Invalid email or password.";  
-    }  
-
-    $stmt->close();  
-}  
+// Fetch vehicles for best-car section  
+$sql = "SELECT id, vehicle_title, brand_name, price_per_day, fuel_type, model_year, seating_capacity, vehicle_overview, image1 FROM vehicles ORDER BY created_at DESC LIMIT 8";  
+$query = $dbh->prepare($sql);  
+$query->execute();  
+$results = $query->fetchAll(PDO::FETCH_OBJ);  
 ?>  
+
 <!DOCTYPE html>  
 <html lang="en">  
 <head>  
-  <meta charset="UTF-8">  
+  <meta charset="UTF-8" />  
   <title>Ormoc Car Rental</title>  
-  <link rel="stylesheet" href="style.css">  
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">    
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />  
+
+  <style>
+    .car-card {
+      transition: background 0.3s, color 0.3s;
+    }
+    .car-card:hover {
+      background: #004153 !important;
+      color: #fff !important;
+    }
+    .car-card:hover h6 a,
+    .car-card:hover .car-price,
+    .car-card:hover .car-description {
+      color: #fff !important;
+    }
+    .car-card:hover .car-info-bar {
+      background: #003040 !important;
+    }
+    .hero {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-bubbles {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .bubble {
+      position: absolute;
+      width: 80px;
+      height: 80px;
+      background: rgba(0, 255, 204, 0.18);
+      border-radius: 50%;
+      filter: blur(2px);
+      animation: floatBubble 8s infinite ease-in-out alternate;
+    }
+
+    .bubble:nth-child(2) { width: 120px; height: 120px; background: rgba(0, 153, 255, 0.15); animation-delay: 2s;}
+    .bubble:nth-child(3) { width: 60px; height: 60px; background: rgba(255, 255, 255, 0.12); animation-delay: 4s;}
+    .bubble:nth-child(4) { width: 100px; height: 100px; background: rgba(0, 255, 153, 0.13); animation-delay: 1s;}
+    .bubble:nth-child(5) { width: 90px; height: 90px; background: rgba(0, 255, 204, 0.10); animation-delay: 3s;}
+
+    @keyframes floatBubble {
+      0% { transform: translateY(0) scale(1);}
+      100% { transform: translateY(-40px) scale(1.1);}
+    }
+
+    .hero-text, .hero-slider {
+      position: relative;
+      z-index: 2;
+    }
+  </style>
 
   <script>  
     function toggleMenu() {  
       const menu = document.getElementById('mobileMenu');  
       menu.classList.toggle('show');  
     }  
-
-    // Optional: close sidebar if user clicks outside of it  
     window.addEventListener('click', function(e) {  
       const sidebar = document.getElementById('mobileMenu');  
       const hamburger = document.querySelector('.hamburger-menu');  
-      // Check if the sidebar is open AND the click is not inside the sidebar AND the click is not on the hamburger menu  
-      if (sidebar.classList.contains('show') &&  
-        !sidebar.contains(e.target) &&  
-        !hamburger.contains(e.target)) {  
+      if (sidebar && sidebar.classList.contains('show') &&  
+            !sidebar.contains(e.target) && !hamburger.contains(e.target)) {  
         sidebar.classList.remove('show');  
       }  
     });  
 
-
     function toggleLoginForm() {  
       const form = document.getElementById('loginForm');  
-      form.style.display = form.style.display === 'block' ? 'none' : 'block';  
-      // Close register form if it's open  
-      document.getElementById('registerForm').style.display = 'none';  
+      if (form) {  
+        form.style.display = (form.style.display === 'block' ? 'none' : 'block');  
+      }  
+      const regForm = document.getElementById('registerForm');  
+      if (regForm) regForm.style.display = 'none';  
     }  
 
     function toggleRegisterForm() {  
       const form = document.getElementById('registerForm');  
-      form.style.display = form.style.display === 'block' ? 'none' : 'block';  
-       // Close login form if it's open  
-      document.getElementById('loginForm').style.display = 'none';  
+      if (form) {  
+        form.style.display = (form.style.display === 'block' ? 'none' : 'block');  
+      }  
+      const loginForm = document.getElementById('loginForm');  
+      if (loginForm) loginForm.style.display = 'none';  
     }  
   </script>  
 </head>  
 <body>  
-<header class="top-header">  
-  <div class="container">  
-    Welcome to Ormoc Car Rental - Call us at (956) 783-3665
-  </div>  
-</header>  
 
-<header class="main-header">  
-  <div class="header-left">  
-    <!-- Hamburger Menu -->  
-    <div class="hamburger-menu" onclick="toggleMenu()">☰</div>  
-    <!-- Logo -->  
-    <img src="images/logo.png" alt="Logo" class="main-logo">  
-  </div>  
-
-  <!-- Top Navigation Bar -->  
-  <nav class="top-nav">  
-    <ul>  
-      <li><a href="#"><i class="fas fa-car"></i> Manage bookings</a></li>  
-      <li><a href="#">🌐 EN</a></li>  
-      <li>  
-        <a href="javascript:void(0);" onclick="toggleLoginForm()">  
-          <i class="fas fa-user"></i> Log in | Register  
-        </a>  
-      </li>  
-    </ul>  
-  </nav>  
-</header>  
-
-<!-- Sidebar Hamburger Menu -->  
-<div id="mobileMenu" class="sidebar">  
-  <div class="sidebar-header">  
-    <span class="close-btn" onclick="toggleMenu()">✕</span>  
-    <img src="images/logo.png" alt="Logo" class="sidebar-logo">  
-  </div>  
-  <ul class="menu-items">  
-    <li><a href="#home" onclick="toggleMenu()">Car Rental</a></li>  
-    <li><a href="#explore" onclick="toggleMenu()">Explore Us</a></li>  
-    <li><a href="#about" onclick="toggleMenu()">About</a></li>  
-    <li><a href="contact.php">Contact Us</a></li>
-    <li><a href="#rrj" onclick="toggleMenu()">RRJ<br><small>Car Subscription</small></a></li>  
-    <li><a href="#business" onclick="toggleMenu()">Business</a></li>  
-  </ul>  
-</div>  
-
-<div id="loginForm" class="form-container" style="display:none;">  
-  <span class="close" onclick="toggleLoginForm()">&times;</span>  
-  <h2>Sign In</h2>  
-  <?php if (isset($_SESSION['error'])): ?>  
-      <div class="error"><?php echo $_SESSION['error']; unset($_SESSION['error']); ?></div>  
-  <?php endif; ?>  
-  <form method="POST" action="">  
-      <input type="email" name="email" placeholder="Email" required>  
-      <input type="password" name="password" placeholder="Password" required>  
-
-      <div style="display: flex; justify-content: space-between; margin-top: 5px; margin-bottom: 10px; font-size: 14px;">  
-          <a href="#" style="text-decoration: none; color: #7d2ae8;">Forgot password?</a>  
-          <a href="#" onclick="toggleRegisterForm(); return false;" style="text-decoration: none; color: #7d2ae8;">Register</a>  
-      </div>  
-
-      <input type="submit" name="login" value="Login">  
-  </form>  
-  <div class="social-login">  
-      <p>Or sign in with</p>  
-      <div class="social-icons">  
-          <a href="#"><img src="facebook-icon.png" alt="Facebook"></a>  
-          <a href="#"><img src="google-icon.png" alt="Google"></a>  
-          <a href="#"><img src="linkedin-icon.png" alt="LinkedIn"></a>  
-      </div>  
-  </div>  
-</div>  
-
-<!-- Register Form -->  
-<div id="registerForm" class="form-container" style="display:none;">  
-  <span class="close" onclick="toggleRegisterForm()">&times;</span>  
-  <h2>Sign Up</h2>  
-  <form method="POST" action="register.php">  
-      <input type="text" name="full_name" placeholder="Full Name" required>  
-      <input type="email" name="email" placeholder="Email" required>  
-      <input type="text" name="contact_number" placeholder="Contact Number" required>  
-      <input type="password" name="password" placeholder="Password" required>  
-      <input type="password" name="confirm_password" placeholder="Confirm Password" required>  
-      <input type="submit" value="Sign Up">  
-  </form>  
-</div>  
-
+<?php include('header.php'); ?>  
 <section class="hero" id="home">  
+  <div class="hero-bubbles">
+    <span class="bubble" style="top: 20%; left: 10%;"></span>
+    <span class="bubble" style="top: 60%; left: 20%;"></span>
+    <span class="bubble" style="top: 30%; left: 80%;"></span>
+    <span class="bubble" style="top: 75%; left: 60%;"></span>
+    <span class="bubble" style="top: 10%; left: 50%;"></span>
+  </div>
   <div class="hero-text">  
-    <h1>Ormoc Car Rental Service</h1>  
-    <p class="tagline">Your journey starts here — fast, safe, and affordable car rentals in Ormoc.</p>  
+    <h1 data-translate="Ormoc Car Rental Service" style="font-size: 3rem; margin-bottom: 5px;">Ormoc Car Rental Service</h1>  
+    <p class="tagline" data-translate="Your journey starts here — fast, safe, and affordable car rentals in Ormoc." style="font-size: 1.2rem; color: #f0f0f0; margin-top: 0; margin-bottom: 15px; font-style: italic;">Your journey starts here — fast, safe, and affordable car rentals in Ormoc.</p>  
     <div class="hero-buttons">  
-      <button class="book" onclick="location.href='book.php'">Book Now</button>  
-      <button class="explore" onclick="location.href='explore.php'">Explore Us</button>  
+      <button class="book" data-translate="Book Now" onclick="location.href='book.php'">Book Now</button>  
+      <button class="explore" data-translate="Explore Us" onclick="location.href='explore.php'">Explore Us</button>  
     </div>  
   </div>  
-  <img src="images/blue.png" alt="Car">  
+
+  <!-- Hero Slider -->
+  <div class="hero-slider" id="hero-slider" style="display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;">
+    <div class="car-blob-bg" style="position:absolute;left:50%;top:55%;transform:translate(-50%,-50%);z-index:1;width:700px;height:700px;pointer-events:none;">
+      <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;">
+        <path fill="#D0E2FF" d="M40.9,-58.8C52.4,-47.9,60.8,-35.2,68.8,-20.1C76.7,-5,84.3,12.4,77.6,22.8C70.8,33.1,49.8,36.3,34.5,39.3C19.2,42.2,9.6,44.7,-4.9,51.4C-19.3,58.1,-38.7,69,-54.4,66.2C-70.2,63.5,-82.4,47.1,-82.1,30.8C-81.8,14.4,-68.9,-1.9,-60.2,-16.8C-51.5,-31.6,-47,-45.1,-37.7,-56.6C-28.3,-68.2,-14.2,-78,0.3,-78.4C14.7,-78.7,29.3,-69.6,40.9,-58.8Z" transform="translate(100 100)" />
+      </svg>
+    </div>
+    <img id="slider-img" src="images/blue.png" alt="Car" style="display:block;margin:0 auto;width:100%;max-width:600px;border-radius:10px;object-fit:cover;min-height:200px;z-index:2;position:relative;">
+    <div id="slider-caption" style="margin-top:10px;text-align:center;color:#222;z-index:3;position:relative;"></div>
+  </div>
+
   <div class="wave">  
     <svg viewBox="0 0 1200 120" preserveAspectRatio="none">  
       <path d="M0,0 C300,100 900,0 1200,100 L1200,120 L0,120 Z"></path>  
     </svg>  
   </div>  
 </section>  
+
+<!-- SVG Wave Divider for Best Car Section -->
+
 <section class="best-car" id="best-car">  
   <div class="container">  
-    <h2>Find the Best Car for You</h2>  
-    <p>Select from our wide range of well-maintained vehicles perfect for every journey.</p>  
+    <h2 data-translate="Find the Best Car for You" style="color: black; font-size: 40px;">
+      Find the <span style="color: #004153;">Best Car</span> for You
+    </h2>  
+    <p data-translate="Select from our wide range of well-maintained vehicles perfect for every journey.">
+      Select from our wide range of well-maintained vehicles perfect for every journey.
+    </p>  
 
     <div class="car-list">  
-      <div class="car-card">  
-        <img src="images/toyota-vios.jpg" alt="Toyota Vios">  
-        <h3>Toyota Vios</h3>  
-        <p>₱1,500/day • Automatic • 5 Seats</p>  
-        <button onclick="location.href='book.php'">Rent Now</button>  
-      </div>  
-
-      <div class="car-card">  
-        <img src="images/mitsubishi-adventure.jpg" alt="Mitsubishi Adventure">  
-        <h3>Mitsubishi Adventure</h3>  
-        <p>₱1,800/day • Manual • 7 Seats</p>  
-        <button onclick="location.href='book.php'">Rent Now</button>  
-      </div>  
-
-      <div class="car-card">  
-        <img src="images/ford-ecosport.jpg" alt="Ford EcoSport">  
-        <h3>Ford EcoSport</h3>  
-        <p>₱2,000/day • Automatic • 5 Seats</p>  
-        <button onclick="location.href='book.php'">Rent Now</button>  
-      </div>  
-    </div>  
-  </div>  
-</section>  
-
-<section class="car-clips" id="car-clips">  
-  <div class="car-clips-container">  
-    <div class="car-text">  
-      <h2>Experience Quality Car Rentals</h2>  
-      <p>We offer reliable, clean, and affordable cars perfect for any trip around Ormoc City and beyond.  
-         Watch some clips of our fleet in action and see why customers love our service!</p>  
-      <ul>  
-        <li>✅ Easy Booking Process</li>  
-        <li>✅ Clean and Well-Maintained Cars</li>  
-        <li>✅ Affordable Daily Rates</li>  
-        <li>✅ Convenient Pickup Locations</li>  
-      </ul>  
+      <?php if ($query->rowCount() > 0 && !empty($results)) : ?>  
+        <?php foreach ($results as $result): ?>  
+          <div class="car-card">  
+            <div class="car-image-wrapper">  
+              <a href="vehicle-details.php?vhid=<?php echo htmlentities($result->id); ?>">  
+                <img src="<?php echo htmlentities(file_exists(__DIR__ . '/admin/uploads/' . basename($result->image1)) ? 'admin/uploads/' . basename($result->image1) : 'uploads/default-image.png'); ?>" alt="<?php echo htmlentities($result->vehicle_title); ?>" class="car-img" />  
+              </a>  
+              <div class="car-info-bar">  
+                <span><i class="fa fa-car" style="color: yellow;"></i> <?php echo htmlentities($result->fuel_type); ?></span>  
+                <span><i class="fa fa-calendar" style="color: yellow;"></i> <?php echo htmlentities($result->model_year); ?> Model</span>  
+                <span><i class="fa fa-user" style="color: yellow;"></i> <?php echo htmlentities($result->seating_capacity); ?> seats</span>  
+              </div>  
+            </div>  
+            <div class="car-details">  
+              <h6><a href="vehicle-details.php?vhid=<?php echo htmlentities($result->id); ?>"><?php echo htmlentities($result->brand_name); ?> , <?php echo htmlentities($result->vehicle_title); ?></a></h6>  
+              <p class="car-price">₱<?php echo htmlentities($result->price_per_day); ?> /Day</p>  
+              <p class="car-description"><?php echo htmlentities(substr($result->vehicle_overview, 0, 70)); ?></p>  
+            </div>  
+          </div>  
+        <?php endforeach; ?>  
+      <?php else: ?>  
+        <p data-translate="No vehicles available at the moment.">No vehicles available at the moment.</p>  
+      <?php endif; ?>  
     </div>  
 
-    <div class="car-videos">  
-      <video src="videos/car1.mp4" controls></video>  
-      <video src="videos/car2.mp4" controls></video>  
-    </div>  
+    <!-- View More Button -->
+    <div class="view-more">
+      <button onclick="location.href='explore.php'" style="margin-top: 20px; padding: 10px 20px; font-size: 16px; background-color: #004153; color: white; border: none; border-radius: 5px; cursor: pointer;">
+        View More
+      </button>
+    </div>
   </div>  
-</section>  
+</section>
 
-
-<section class="about">  
-  <div class="about-content">  
-  <h2 style="text-align: center;">About Us</h2>  
-  <p>Welcome to <strong>Ormoc Car Rental</strong> — your trusted partner for reliable and affordable vehicle rentals in Ormoc City.</p>  
-    <ul>  
-
-    </ul>  
-  </div>  
-  <div class="about-image">  
-    <img src="images/blue.png" alt="Car Rental Service Image">  
-  </div>  
-</section>  
-
-<section class="newsletter" id="newsletter">  
-  <div class="newsletter-container">  
-    <h2>Subscribe to Our Newsletter</h2>  
-    <p>Get the latest updates, special promos, and exclusive car rental deals straight to your inbox.</p>  
-    <form class="subscribe-form" action="#" method="post">  
-      <input type="email" name="email" placeholder="Enter your email address" required>  
-      <button type="submit">Subscribe</button>  
-    </form>  
-  </div>  
-</section>  
-<footer style="background: #222; color: #fff; padding: 30px 20px; text-align: center;">
-  <div style="max-width: 1200px; margin: auto;">
-    <h3>Ormoc Car Rental Service</h3>
-    <p>&copy; 2025 Ormoc Car Rental. All rights reserved.</p>
-
-    <div style="margin: 15px 0;">
-      <p><strong>Phone:</strong> +63 912 345 6789</p>
-      <p><strong>Email:</strong> contact@ormoccarrental.com</p>
-      <p><strong>Location:</strong> Brgy. Cogon, Ormoc City, Leyte</p>
+<section class="car-clips" id="car-clips" style="padding: 100px 90px; background-color: #f9f9f9;">
+  <div class="car-clips-container" style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 40px; max-width: 1400px; margin: 0 auto;">
+    <div class="car-text" style="flex: 1; min-width: 300px; text-align: left;">
+      <h2 data-translate="Experience Quality Car Rentals" style="font-size: 3rem; margin-bottom: 20px;">Experience Quality Car Rentals</h2>
+      <p data-translate="We offer reliable, clean, and affordable cars perfect for any trip around Ormoc City and beyond. Watch some clips of our fleet in action and see why customers love our service!" style="font-size: 1.4rem; line-height: 2; margin-bottom: 20px;">
+        We offer reliable, clean, and affordable cars perfect for any trip around Ormoc City and beyond. Watch some clips of our fleet in action and see why customers love our service!
+      </p>
+      <ul style="font-size: 1.4rem; line-height: 2; padding-left: 20px; list-style-position: inside;">
+        <li data-translate="Easy Booking Process">✅ Easy Booking Process</li>
+        <li data-translate="Clean and Well-Maintained Cars">✅ Clean and Well-Maintained Cars</li>
+        <li data-translate="Affordable Daily Rates">✅ Affordable Daily Rates</li>
+        <li data-translate="Convenient Pickup Locations">✅ Convenient Pickup Locations</li>
+      </ul>
     </div>
 
-    <div style="margin-top: 20px;">
-      <a href="#"><img src="images/FB.jpg" alt="Facebook" style="height: 30px; margin: 0 10px;"></a>
-      <a href="#"><img src="images/google.png" alt="Google" style="height: 30px; margin: 0 10px;"></a>
-      <a href="#"><img src="images/linkedin-icon.png" alt="LinkedIn" style="height: 30px; margin: 0 10px;"></a>
-    </div>
+    <video src="images/CAR.mp4" controls style="flex: 1; min-width: 700px; max-width: 300px; max-height: 500px; border-radius: 10px; box-shadow: 0 6px 15px rgba(0, 0, 0, 0.3); object-fit: cover;"></video>
   </div>
-</footer>
+</section>
+
+<section class="about" style="position:relative; overflow:hidden;">
+
+  <div class="about-content" style="position:relative; z-index:1; padding: 60px 0;">
+    <h2 style="text-align: center;" data-translate="Promos & Offers">Promos & Offers</h2>  
+    <p data-translate="Check out our latest promos and exclusive offers! Enjoy huge discounts, free upgrades, and more from Ormoc Car Rental.">
+      Check out our latest promos and exclusive offers! Enjoy huge discounts, free upgrades, and more from Ormoc Car Rental.
+    </p>
+
+    <!-- Promo/Offers Container -->
+    <div class="promo-offers-row" style="display: flex; flex-wrap: wrap; justify-content: center; gap: 32px; margin: 40px auto 24px auto;">
+      <div class="promo-offer" style="flex:1 1 220px; min-width:200px; max-width:320px; min-height:460px; background: url('images/promo.webp') center/cover no-repeat; position: relative; color: #fff; border-radius: 18px; box-shadow: 0 4px 24px #00415322; padding: 32px 24px; text-align: center; font-size: 2rem; font-weight: bold; letter-spacing: 1px; overflow: hidden;">
+        <div style="position:absolute;top:0;left:0;width:150%;height:150%;background:rgba(0,65,83,0.7);z-index:0;"></div>
+        <span style="position:relative;z-index:1;font-size: 2.5rem; color: #f4c542;">50% OFF</span><br>
+        <span style="position:relative;z-index:1;font-size: 1.2rem; font-weight: 400; color: #fff;">on your first car rental this month!</span>
+      </div>
+      <div class="promo-offer" style="flex:1 1 220px; min-width:200px; max-width:320px; min-height:260px; background: url('images/free.webp') center/cover no-repeat; position: relative; color: #fff; border-radius: 18px; box-shadow: 0 4px 24px #00415322; padding: 32px 24px; text-align: center; font-size: 2rem; font-weight: bold; letter-spacing: 1px; overflow: hidden;">
+        <div style="position:absolute;top:0;left:0;width:150%;height:150%;background:rgba(0,65,83,0.7);z-index:0;"></div>
+        <span style="position:relative;z-index:1;font-size: 2.5rem; color: #f4c542;">FREE UPGRADE</span><br>
+        <span style="position:relative;z-index:1;font-size: 1.2rem; font-weight: 400; color: #fff;">Get a free car upgrade on select models!</span>
+      </div>
+      <div class="promo-offer" style="flex:1 1 220px; min-width:200px; max-width:320px; min-height:260px; background: url('images/Team.jpg') center/cover no-repeat; position: relative; color: #fff; border-radius: 18px; box-shadow: 0 4px 24px #00415322; padding: 32px 24px; text-align: center; font-size: 2rem; font-weight: bold; letter-spacing: 1px; overflow: hidden;">
+        <div style="position:absolute;top:0;left:0;width:150%;height:150%;background:rgba(0,65,83,0.7);z-index:0;"></div>
+        <span style="position:relative;z-index:1;font-size: 2.5rem; color: #f4c542;">UNLIMITED MILEAGE</span><br>
+        <span style="position:relative;z-index:1;font-size: 1.2rem; font-weight: 400; color: #fff;">Drive as much as you want, no extra fees!</span>
+      </div>
+    </div>
+
+    <!-- Car Brand Logos Row -->
+    <div class="brand-logos" style="display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap:30px; margin: 200px 0 0 0;">
+      <img src="images/TOYOTA.png" alt="Toyota" style="height:80px;filter:grayscale(0.2);">
+      <img src="images/HONDA.png" alt="Honda" style="height:80px;filter:grayscale(0.2);">
+      <img src="images/FORD.png" alt="Ford" style="height:80px;filter:grayscale(0.2);">
+      <img src="images/BMW.webp" alt="BMW" style="height:80px;filter:grayscale(0.2);">
+      <img src="images/MERCEDES.png" alt="Mercedes" style="height:80px;filter:grayscale(0.2);">
+      <img src="images/NISSAN.png" alt="Nissan" style="height:80px;filter:grayscale(0.2);">
+      <img src="images/SUZUKI.png" alt="Suzuki" style="height:80px;filter:grayscale(0.2);">
+      <img src="images/AUDI.png" alt="Audi" style="height:80px;filter:grayscale(0.2);">
+      <img src="images/ISUZU.png" alt=" Isuzu" style="height:80px;filter:grayscale(0.2);">
+      <img src="images/HYUNDAI.png" alt="Hyundai" style="height:80px;filter:grayscale(0.2);">
+      <img src="images/BUGATTI.png" alt="Bugatti" style="height:80px;filter:grayscale(0.2);">
+
+      <!-- Add more logos as needed -->
+    </div>
+  </div>  
+</section>  
+
+
+<?php include('footer.php'); ?>  
+
+<!-- Back to Top Button -->
+<button id="backToTopBtn" title="Back to Top" style="display:none;position:fixed;bottom:40px;right:40px;z-index:9999;background:#004153;color:white;border:none;border-radius:50%;width:50px;height:50px;box-shadow:0 2px 8px #0003;cursor:pointer;font-size:24px;align-items:center;justify-content:center;">
+  <i class="fa fa-arrow-up"></i>
+</button>
+
+<!-- Optional Script for Rent button login check -->  
+<script>  
+function handleRent(carId) {  
+  const isLoggedIn = <?php echo json_encode($isLoggedIn); ?>;  
+  if (isLoggedIn) {  
+    window.location.href = 'book.php?id=' + carId;  
+  } else {  
+    alert("Please login to rent a car.");   
+    // Or show login modal if implemented  
+  }  
+}
+
+// Back to Top Button Logic
+const backToTopBtn = document.getElementById('backToTopBtn');
+window.addEventListener('scroll', function() {
+  // Show button if scrolled near the bottom (footer area)
+  if ((window.innerHeight + window.scrollY) >= (document.body.offsetHeight - 200)) {
+    backToTopBtn.style.display = 'flex';
+  } else {
+    backToTopBtn.style.display = 'none';
+  }
+});
+backToTopBtn.addEventListener('click', function() {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+</script>  
+
+<!-- Hero Slider Script -->
+<script>
+const apiKey = 'HI7PYsS8hy+gH+GJD/yT+A==pmInSFKQ7YKHGCVa';
+const pexelsApiKey = 'UgMEbt4LvPNWVWTNjNxjPmXarAkqkiAihLRKw3dz4OojTqpkfFEeWS54';
+const carMakes = [
+  'audi', 'toyota', 'honda', 'ford', 'bmw',
+  'mercedes', 'chevrolet', 'nissan', 'mazda', 'hyundai',
+  'kia', 'volkswagen', 'subaru', 'jeep', 'lexus',
+  'mitsubishi', 'volvo', 'porsche', 'jaguar', 'tesla'
+];
+const carYears = [2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015];
+let cars = [];
+let current = 0;
+
+function fetchPexelsImage(make, model) {
+  const query = encodeURIComponent(`${make} ${model} car`);
+  return fetch(`https://api.pexels.com/v1/search?query=${query}&per_page=1`, {
+    headers: { 'Authorization': pexelsApiKey }
+  })
+    .then(res => res.json())
+    .then(data => (data.photos && data.photos[0] && data.photos[0].src && data.photos[0].src.medium) ? data.photos[0].src.medium : 'images/blue.png')
+    .catch(() => 'images/blue.png');
+}
+
+function showCar(index) {
+  if (!cars.length) return;
+  const car = cars[index];
+  sliderImg.onerror = function() {
+    this.onerror = null;
+    this.src = 'images/blue.png'; // fallback image
+  };
+  sliderImg.src = car.image;
+  sliderCaption.innerHTML = `<h2 style='margin:0;font-size:2rem;'>${car.make} ${car.model}</h2><p style='margin:0.5em 0 0 0;'>${car.year} • ${car.fuel_type} • ${car.class}</p>`;
+}
+
+function nextCar() {
+  current = (current + 1) % cars.length;
+  showCar(current);
+}
+
+function fetchLatestCarWithImage(make) {
+  let yearIndex = 0;
+  function tryYear() {
+    if (yearIndex >= carYears.length) return Promise.resolve(null);
+    const year = carYears[yearIndex++];
+    return fetch(`https://api.api-ninjas.com/v1/cars?make=${make}&year=${year}`, {
+      headers: { 'X-Api-Key': apiKey }
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data && data[0]) {
+        const car = data[0];
+        return fetchPexelsImage(car.make, car.model).then(img => {
+          car.image = img;
+          return car;
+        });
+      } else {
+        return tryYear();
+      }
+    })
+    .catch(() => tryYear());
+  }
+  return tryYear();
+}
+
+Promise.all(
+  carMakes.map(make => fetchLatestCarWithImage(make))
+).then(results => {
+  cars = results.filter(Boolean); // remove any nulls
+  if (cars.length) {
+    showCar(0);
+    setInterval(nextCar, 4000);
+  } else {
+    sliderImg.src = 'images/blue.png';
+    sliderCaption.innerHTML = '<p>Could not load car data.</p>';
+  }
+});
+</script>
 
 </body>  
-</html>  
+</html>

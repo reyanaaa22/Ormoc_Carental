@@ -2,10 +2,9 @@
 // manage_brand.php
 include 'db.php';
 
-// SQL query to fetch all brands
+// Fetch all brands
 $sql = "SELECT * FROM brands";
 $result = $conn->query($sql);
-
 ?>
 <!DOCTYPE html>  
 <html lang="en">  
@@ -18,6 +17,18 @@ $result = $conn->query($sql);
 
 <div class="container mt-4">  
     <h4>Manage Brands</h4>  
+
+    <!-- Status message -->
+    <?php if (isset($_GET['status'])): ?>
+        <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
+            <?php
+                if ($_GET['status'] === 'updated') echo "✅ Brand updated successfully!";
+                if ($_GET['status'] === 'deleted') echo "🗑️ Brand deleted successfully!";
+            ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    <?php endif; ?>
+
     <div class="card mt-3">  
         <div class="card-header bg-light">  
             <strong>LISTED BRANDS</strong>  
@@ -60,7 +71,7 @@ $result = $conn->query($sql);
                                 <td><?php echo $row['updation_date']; ?></td>
                                 <td>
                                     <a href="edit_brand.php?id=<?php echo $row['id']; ?>" class="btn btn-sm btn-primary">Edit</a>
-                                    <a href="delete_brand.php?id=<?php echo $row['id']; ?>" class="btn btn-sm btn-danger">Delete</a>
+                                    <a href="delete_brand.php?id=<?php echo $row['id']; ?>" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure you want to delete this brand?')">Delete</a>
                                 </td>
                             </tr>
                         <?php endwhile; ?>
